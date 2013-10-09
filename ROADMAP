@@ -1,0 +1,31 @@
+IMMEDIATE BUGS:
+- Features:
+  Hashtags
+  URL
+
+- Clean up created_at date string so it can be compared with current time.
+
+- Currently, the collection only chooses tweets by day, so the data is all
+  a few hours from midnight. Figure out how to sample different times
+  of the day/the whole week.
+
+GENERAL MODEL:
+  Simple regression tree. Initial branching on the number of followers that the
+  original poster had. X variables undetermined for now, but some subset or
+  combination of the "static" variables that should not change for the duration
+  of the 1 hour "retweet window" of a tweet. i.e. tweet features (minus current
+  number of tweets, which will change while the tweet is young), tweeter
+  features, possibly historical behavior of the tweeter/related tweets.
+
+TRAINING:
+  - Grab half the dataset.
+  - Optimize for predicting retweets.
+
+VALIDATION:
+  - Grab other half of the dataset.
+  - Predict and score.
+
+TESTING (ONLINE TESTING):
+  - grab tweets and filter for ones that are 5 minutes or younger.
+  - predict the number of tweets that it will have.
+  - grab the same tweets again in an hour. Predict and score.
