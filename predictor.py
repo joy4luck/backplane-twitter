@@ -5,13 +5,14 @@
 __author__ = 'joy4luck'
 
 import getopt
-import sys
-import requests
 import json
-from requests_oauthlib import OAuth1
+import requests
+import sys
+import time
 #some namespace pollution, but just a few constants
-from secrets import *
 from bpt_constants import *
+from requests_oauthlib import OAuth1
+from secrets import *
 
 def PrintUsageAndExit():
   print USAGE
@@ -140,7 +141,7 @@ def main():
       'count': '200',
       'include_entities' : 'false'}
 
-    with open('big_tweet_list.txt', 'w') as f:
+    with open('ages_big_tweet_list.txt', 'w') as f:
       for s in SEEDS:
         for d in DATES:
           params['q'] = s
@@ -151,6 +152,9 @@ def main():
             continue
           for r in data['statuses']:
             retweets, tweet, user = parser.ParseTweet(r)
+            c_a = tweet.get('created_at').strip()
+            t_since_epoch = time.mktime(time.strptime(c_a, TIME_PATTERN))
+            age = time.time() - t_since_epoch + 14400 # account for GMT
             data_point = ','.join([
               retweets,
               tweet.get('id_str'),
@@ -159,11 +163,10 @@ def main():
               user.get('friends_count', '0'),
               user.get('listed_count', '0'),
               tweet.get('in_reply_to_user_id_str', ''),
-              tweet.get('created_at'),])
+              str(t_since_epoch),
+              str(age),])
             # Write each new data point as a comma separated list on a new line.
             f.write(data_point + '\n')
-          break
-        break
 
     print "Done collecting. :D"
 
@@ -186,6 +189,18 @@ def main():
 
     #TODO Prediction magicks
     print "Done. :D"
+
+'''
+def timestampCleanup(filename):
+  original = open(filename, 'r')
+  clean = open("format_" + filename, 'w')
+  for line in original:
+    data = line.split(',')
+    s = data[-1].strip()
+    t_since_epoch = time.mktime(time.strptime(s, "%a %b %d %H:%M:%S +0000 %Y"))
+    new_line = ','.join(data[:-1] + [str(t_since_epoch), str(age)])
+    clean.write(new_line + '\n')
+'''
 
 if __name__ == "__main__":
   main()

@@ -14,6 +14,8 @@ USAGE = '''Usage: predict --tweetid=[id]
     --debug: for dev purposes. Does whatever I want it do.
 '''
 
+TIME_PATTERN = "%a %b %d %H:%M:%S +0000 %Y"
+
 # Single level interesting entries for a tweet.
 TWEET_KEYS = [
   'id_str',
@@ -29,7 +31,7 @@ USER_KEYS = [
   'listed_count',
   'lang']
 
-# collection of random seed values
+# collection of 20 random seed values
 SEEDS = [
   'Google', 
   'Amazon',
@@ -58,5 +60,4 @@ DATES = [
   '2013-10-07',
   '2013-10-06',
   '2013-10-05',
-  '2013-10-04',
 ]
