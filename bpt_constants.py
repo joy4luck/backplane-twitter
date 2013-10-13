@@ -18,6 +18,7 @@ TIME_PATTERN = "%a %b %d %H:%M:%S +0000 %Y"
 
 # Single level interesting entries for a tweet.
 TWEET_KEYS = [
+  'text',
   'id_str',
   'created_at',
   'text',

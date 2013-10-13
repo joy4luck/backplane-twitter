@@ -1,10 +1,11 @@
 IMMEDIATE BUGS:
-- Features:
-  Hashtags
-  URL
+- Get user's previous retweet counts
 
-- Clean up created_at date string so it can be compared with current time.
+- modify collection script to include new data + use classifier
 
+- pickle the classifier once we have it
+
+BACKLOGGED BUGS:
 - Currently, the collection only chooses tweets by day, so the data is all
   a few hours from midnight. Figure out how to sample different times
   of the day/the whole week.
@@ -16,6 +17,24 @@ GENERAL MODEL:
   of the 1 hour "retweet window" of a tweet. i.e. tweet features (minus current
   number of tweets, which will change while the tweet is young), tweeter
   features, possibly historical behavior of the tweeter/related tweets.
+
+  y = num of tweets
+  # properties of the user
+  x1.followers
+  x2.friends
+  x3.listed
+  x4.average_retweets_of_users_past_tweets
+  # properties of the tweet
+  x5.num_hashtags
+  x6.num_urls
+  x7.char_length
+  x8.in_reply_to (binary)
+
+METRIC:
+  1. Accuracy of predicting whether or not a tweet will be retweeted at all.
+    - Percantage correctly binned
+  2. Accuracy of predicting how many retweets.
+    - Percentage error from correct
 
 TRAINING:
   - Grab half the dataset.

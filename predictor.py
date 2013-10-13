@@ -18,7 +18,48 @@ def PrintUsageAndExit():
   print USAGE
   sys.exit(2)
 
+class Tweet:
+  '''Tweet struct.'''
+  def __init__(self, retweets, tweet_id, user_id, followers_count,
+              friends_count, listed_count, previous_average,
+              hashtags, urls, tweet_len, is_a_reply, age):
+    #data point ID
+    self.retweets = retweets    # Use only for training
+    self.tweet_id = tweet_id
+    self.user_id = user_id
+    # user features
+    self.followers_count = followers_count
+    self.friends_count = friends_count
+    self.listed_count = listed_count
+    self.previous_average = previous_average
+    # tweet features
+    self.hashtags = hashtags
+    self.urls = urls
+    self.tweet_len = tweet_len
+    self.is_a_reply = is_a_reply
+    self.age = age
+
+    self.data = [self.retweets,
+      self.tweet_id,
+      self.user_id,
+      self.followers_count,
+      self.friends_count,
+      self.listed_count,
+      self.previous_average,
+      self.hashtags,
+      self.urls,
+      self.tweet_len,
+      self.is_a_reply,
+      self.age]
+               
+  def __str__(self):
+    return "%s, %s" % (self.tweet_id, self.retweets)
+
+  def __repr__(self):
+    return ','.join([str(d) for d in self.data])
+
 class Searcher(object):
+  '''Interface to Twitter API.'''
   _timeout = 15
   twitter_api_base = 'https://api.twitter.com/1.1'
   search_tweets = 'search/tweets.json'
@@ -69,25 +110,31 @@ class Searcher(object):
     url += '?user_id=' + unicode(tweetid)
     url += '&count=20'
     return self._Get(url)
+  
+  def getAverage(self, user_id):
+    '''
+    Finds a user's past 20 tweets and averages their retweet count.
+    '''
+    return 0
 
 class Parser(object):
+  def __init__(self):
+    self.searcher = Searcher()
+
   def ParseTweet(self, tweet_json, skip_retweet=True):
     '''
-    Convert the json representation of a tweet into a few features we
-    care about.
+    Parse json representation of a tweet.
 
     Args:
       tweet_json: the json string returned by twitter API call.
       skip_retweet: if true, instead get information of original tweet.
 
-    Returns tuple of:
-      retweets: number of retweets the tweet currently has
-      tweet_dict: short dict of a few features of a tweet. See bpt_constants.
-      user_dict: short dict of a few features of a tweet. See bpt_constants.
+    Returns:
+      tweet object with populated data
       
     '''
     if skip_retweet and tweet_json.get('retweeted_status'):
-      # If this is a retweet, consider it a dupe of the original post.
+      # This is a retweet, consider it a dupe of the original post.
       tweet_json = tweet_json.get('retweeted_status')
 
     tweet_dict = {}
@@ -95,13 +142,25 @@ class Parser(object):
       if tweet_json.get(key):
         tweet_dict[key] = unicode(tweet_json[key])
       
-    retweets = str(tweet_json['retweet_count']) # Use only for training
+    c_a = tweet_dict.get('created_at').strip()
+    t_since_epoch = time.mktime(time.strptime(c_a, TIME_PATTERN))
+    age = time.time() - t_since_epoch + 14400 # account for GMT
+
     user_dict = self.ParseUser(tweet_json['user'])
 
-    ENTITIES = 'entities'
-    # TODO(joyc) handle hashtags/other references
-
-    return retweets, tweet_dict, user_dict
+    tweet = Tweet(int(tweet_json['retweet_count']),
+                  tweet_dict.get('id_str'),
+                  user_dict.get('id_str'),
+                  int(user_dict.get('followers_count', 0)),
+                  int(user_dict.get('friends_count', 0)),
+                  int(user_dict.get('listed_count', 0)),
+                  self.searcher.getAverage(user_dict.get('id_str')),
+                  len(tweet_json.get('entities').get('hashtags')),
+                  len(tweet_json.get('entities').get('urls')),
+                  len(tweet_dict.get('text')),
+                  1 if tweet_dict.get('in_reply_to_user_id_str', '') else 0,
+                  age,)
+    return tweet
 
   def ParseUser(self, user_json):
     # Single level interesting entries for a user.
@@ -110,6 +169,17 @@ class Parser(object):
       if user_json.get(key):
         user_dict[key] = unicode(user_json[key])
     return user_dict
+
+  def ParseTimeline(self, user_json):
+    '''Parse multiple tweets from a timeline.
+    Args:
+      json string returned by twitter API call.
+
+    Returns:
+      list of Tweet objects
+    '''
+    # TODO
+    return []
 
 def main():
   try:
@@ -135,72 +205,81 @@ def main():
   searcher = Searcher()
   parser = Parser()
 
-  if debug: # Currently used to search the database to collect some numbers.
-    params = {
-      'lang':'en',
-      'count': '200',
-      'include_entities' : 'false'}
-
-    with open('ages_big_tweet_list.txt', 'w') as f:
-      for s in SEEDS:
-        for d in DATES:
-          params['q'] = s
-          params['until'] = d
-          http_response = searcher.Search(params).content
-          data = json.loads(http_response)
-          if not data.get('statuses'):
-            continue
-          for r in data['statuses']:
-            retweets, tweet, user = parser.ParseTweet(r)
-            c_a = tweet.get('created_at').strip()
-            t_since_epoch = time.mktime(time.strptime(c_a, TIME_PATTERN))
-            age = time.time() - t_since_epoch + 14400 # account for GMT
-            data_point = ','.join([
-              retweets,
-              tweet.get('id_str'),
-              user.get('id_str'),
-              user.get('followers_count', '0'),
-              user.get('friends_count', '0'),
-              user.get('listed_count', '0'),
-              tweet.get('in_reply_to_user_id_str', ''),
-              str(t_since_epoch),
-              str(age),])
-            # Write each new data point as a comma separated list on a new line.
-            f.write(data_point + '\n')
-
-    print "Done collecting. :D"
+  if debug:
+    searcher.getTimeline('127925808')
 
   else: # Currently searches for tweet data.
     http_response = searcher.GetTweetJson(tweetid)
-    data = json.loads(http_response.content)
-
-    retweets, tweet, user = parser.ParseTweet(data, skip_retweet=False)
-    print DIV
-    print "RETWEET_COUNT = %s" % retweets
-    for k in tweet:
-      print k + ": " + tweet[k]
-    print DIV
-    for k in user:
-      print k + ": " + user[k]
-
     # Save the raw json results of a tweet query.
     with open("last_tweet_query.txt", 'w') as f:
       f.write(http_response.content)
 
-    #TODO Prediction magicks
+    data = json.loads(http_response.content)
+
+    tweet = parser.ParseTweet(data, skip_retweet=False)
+    print DIV
+    print str(tweet)
+    print DIV
+    print repr(tweet)
+    
+    print "PREDICTED RETWEETS = %s" % predict(tweet)
     print "Done. :D"
 
-'''
-def timestampCleanup(filename):
+def collectData(filename='big_tweet_list.txt'):
+  '''
+  Used to train a predictor.
+  '''
+  params = {
+    'lang':'en',
+    'count': '200',
+    'include_entities' : 'false'}
+
+  with open(filename, 'w') as f:
+    for s in SEEDS:
+      for d in DATES:
+        params['q'] = s
+        params['until'] = d
+        http_response = searcher.Search(params).content
+        data = json.loads(http_response)
+        if not data.get('statuses'):
+          continue
+        for r in data['statuses']:
+          tweet = parser.ParseTweet(r)
+          # Write each new data point as a comma separated list on a new line.
+          f.write(repr(tweet) + '\n')
+          # sort by date. Only train on tweets ~1 hour old
+          # TODO Save and use data
+
+  print "Done collecting. :D"
+
+def predict(tweet):
+  '''
+  Use previously trained predictor to guess number of retweets in an hour.
+  '''
+  # TODO
+  return 0
+
+def sampleTweets(filename='baby_tweets.txt'):
+  '''
+  Collect tweet data on tweets younger than 5 minutes.
+  Make predictions and save into file under filename.
+  '''
+  # TODO
+  searcher = Searcher()
+  parser = Parser()
+  for s in SEEDS:
+    pass
+
+def scoreAllTweets(filename='baby_tweets.txt'):
+  '''
+  Find actual counts, score previous predictions.
+  '''
+  # TODO
   original = open(filename, 'r')
-  clean = open("format_" + filename, 'w')
+  update = open("scored_" + filename, 'w')
   for line in original:
-    data = line.split(',')
-    s = data[-1].strip()
-    t_since_epoch = time.mktime(time.strptime(s, "%a %b %d %H:%M:%S +0000 %Y"))
-    new_line = ','.join(data[:-1] + [str(t_since_epoch), str(age)])
-    clean.write(new_line + '\n')
-'''
+    tweet_id = line.strip()
+    update.write(new_line + '\n')
 
 if __name__ == "__main__":
   main()
