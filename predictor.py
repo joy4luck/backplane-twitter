@@ -6,6 +6,7 @@ __author__ = 'joy4luck'
 
 import getopt
 import json
+import numpy
 import requests
 import sys
 import time
@@ -107,21 +108,16 @@ class Searcher(object):
     Returns a user's past 20 tweets.
     '''
     url = '/'.join([Searcher.twitter_api_base, Searcher.status_timeline])
-    url += '?user_id=' + unicode(tweetid)
+    url += '?user_id=' + unicode(user_id)
     url += '&count=20'
     return self._Get(url)
   
-  def getAverage(self, user_id):
-    '''
-    Finds a user's past 20 tweets and averages their retweet count.
-    '''
-    return 0
 
 class Parser(object):
   def __init__(self):
     self.searcher = Searcher()
 
-  def ParseTweet(self, tweet_json, skip_retweet=True):
+  def ParseTweet(self, tweet_json, skip_retweet=True, get_avg=True):
     '''
     Parse json representation of a tweet.
 
@@ -148,13 +144,19 @@ class Parser(object):
 
     user_dict = self.ParseUser(tweet_json['user'])
 
+    
+    prev_rtwt = 0
+    if get_avg:
+      prev_rtwt = self.getAverage(user_dict.get('id_str'),
+                                  skip=tweet_dict.get('id_str'))
+
     tweet = Tweet(int(tweet_json['retweet_count']),
                   tweet_dict.get('id_str'),
                   user_dict.get('id_str'),
                   int(user_dict.get('followers_count', 0)),
                   int(user_dict.get('friends_count', 0)),
                   int(user_dict.get('listed_count', 0)),
-                  self.searcher.getAverage(user_dict.get('id_str')),
+                  prev_rtwt,
                   len(tweet_json.get('entities').get('hashtags')),
                   len(tweet_json.get('entities').get('urls')),
                   len(tweet_dict.get('text')),
@@ -170,7 +172,7 @@ class Parser(object):
         user_dict[key] = unicode(user_json[key])
     return user_dict
 
-  def ParseTimeline(self, user_json):
+  def ParseTimeline(self, timeline_json):
     '''Parse multiple tweets from a timeline.
     Args:
       json string returned by twitter API call.
@@ -178,8 +180,22 @@ class Parser(object):
     Returns:
       list of Tweet objects
     '''
-    # TODO
-    return []
+    tweets = []
+    for t in timeline_json:
+      t = self.ParseTweet(t, get_avg=False)
+      tweets.append(t)
+    return tweets
+
+  def getAverage(self, user_id, skip=None):
+    '''
+    Finds a user's past 20 tweets and averages their retweet count.
+    '''
+    http_response = self.searcher.getTimeline(user_id)
+    with open("timeline_query.txt", 'w') as f:
+      f.write(http_response.content)
+    tweets = self.ParseTimeline(json.loads(http_response.content))
+    
+    return numpy.mean([t.retweets for t in tweets if not t.tweet_id == skip])
 
 def main():
   try:
@@ -206,7 +222,8 @@ def main():
   parser = Parser()
 
   if debug:
-    searcher.getTimeline('127925808')
+    print "AVERAGE %s" % parser.getAverage('127925808')
+    return
 
   else: # Currently searches for tweet data.
     http_response = searcher.GetTweetJson(tweetid)
@@ -247,7 +264,7 @@ def collectData(filename='big_tweet_list.txt'):
           tweet = parser.ParseTweet(r)
           # Write each new data point as a comma separated list on a new line.
           f.write(repr(tweet) + '\n')
-          # sort by date. Only train on tweets ~1 hour old
+          # sort by date. Only train on tweets 1-3 hours old
           # TODO Save and use data
 
   print "Done collecting. :D"

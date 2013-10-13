@@ -1,6 +1,4 @@
 IMMEDIATE BUGS:
-- Get user's previous retweet counts
-
 - modify collection script to include new data + use classifier
 
 - pickle the classifier once we have it
