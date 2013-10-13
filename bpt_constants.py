@@ -16,6 +16,13 @@ USAGE = '''Usage: predict --tweetid=[id]
 
 TIME_PATTERN = "%a %b %d %H:%M:%S +0000 %Y"
 
+# Time intervals in seconds
+FIVE_MINUTES = 300
+ONE_HOUR = 3600
+THREE_HOURS = 10800
+
+PICKLED_REGRESSION = 'regression.pkl'
+
 # Single level interesting entries for a tweet.
 TWEET_KEYS = [
   'text',

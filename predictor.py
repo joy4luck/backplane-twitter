@@ -7,6 +7,7 @@ __author__ = 'joy4luck'
 import getopt
 import json
 import numpy
+import pickle
 import requests
 import sys
 import time
@@ -14,6 +15,7 @@ import time
 from bpt_constants import *
 from requests_oauthlib import OAuth1
 from secrets import *
+from sklearn import linear_model
 
 def PrintUsageAndExit():
   print USAGE
@@ -25,20 +27,20 @@ class Tweet:
               friends_count, listed_count, previous_average,
               hashtags, urls, tweet_len, is_a_reply, age):
     #data point ID
-    self.retweets = retweets    # Use only for training
-    self.tweet_id = tweet_id
-    self.user_id = user_id
+    self.retweets = int(retweets)    # Use only for training
+    self.tweet_id = int(tweet_id)
+    self.user_id = int(user_id)
     # user features
-    self.followers_count = followers_count
-    self.friends_count = friends_count
-    self.listed_count = listed_count
-    self.previous_average = previous_average
+    self.followers_count = int(followers_count)
+    self.friends_count = int(friends_count)
+    self.listed_count = int(listed_count)
+    self.previous_average = float(previous_average)
     # tweet features
-    self.hashtags = hashtags
-    self.urls = urls
-    self.tweet_len = tweet_len
-    self.is_a_reply = is_a_reply
-    self.age = age
+    self.hashtags = int(hashtags)
+    self.urls = int(urls)
+    self.tweet_len = int(tweet_len)
+    self.is_a_reply = int(is_a_reply)
+    self.age = long(age)
 
     self.data = [self.retweets,
       self.tweet_id,
@@ -150,6 +152,8 @@ class Parser(object):
       prev_rtwt = self.getAverage(user_dict.get('id_str'),
                                   skip=tweet_dict.get('id_str'))
 
+    hashtags = len(tweet_json.get('entities', {}).get('hashtags', []))
+    urls = len(tweet_json.get('entities', {}).get('urls', []))
     tweet = Tweet(int(tweet_json['retweet_count']),
                   tweet_dict.get('id_str'),
                   user_dict.get('id_str'),
@@ -157,8 +161,8 @@ class Parser(object):
                   int(user_dict.get('friends_count', 0)),
                   int(user_dict.get('listed_count', 0)),
                   prev_rtwt,
-                  len(tweet_json.get('entities').get('hashtags')),
-                  len(tweet_json.get('entities').get('urls')),
+                  hashtags,
+                  urls,
                   len(tweet_dict.get('text')),
                   1 if tweet_dict.get('in_reply_to_user_id_str', '') else 0,
                   age,)
@@ -197,6 +201,24 @@ class Parser(object):
     
     return numpy.mean([t.retweets for t in tweets if not t.tweet_id == skip])
 
+def predict(tweetid):
+  '''
+  Use previously trained predictor to guess number of retweets in an hour.
+  '''
+  pkl_file = open('regression.pkl', 'rb')
+  regression = pickle.load(pkl_file)
+  pkl_file.close()
+
+  searcher = Searcher()
+  parser = Parser()
+
+  http_response = searcher.GetTweetJson(tweetid)
+  data = json.loads(http_response.content)
+  tweet = parser.ParseTweet(data, get_avg=False)
+
+  x = tweet.data[3:-1]
+  return regression.predict(x)
+
 def main():
   try:
     shortflags = 'h'
@@ -221,7 +243,7 @@ def main():
   searcher = Searcher()
   parser = Parser()
 
-  if debug:
+  if debug: # Gets the average number of retweets for user's last 2 tweets
     print "AVERAGE %s" % parser.getAverage('127925808')
     return
 
@@ -240,63 +262,6 @@ def main():
     print repr(tweet)
     
     print "PREDICTED RETWEETS = %s" % predict(tweet)
-    print "Done. :D"
-
-def collectData(filename='big_tweet_list.txt'):
-  '''
-  Used to train a predictor.
-  '''
-  params = {
-    'lang':'en',
-    'count': '200',
-    'include_entities' : 'false'}
-
-  with open(filename, 'w') as f:
-    for s in SEEDS:
-      for d in DATES:
-        params['q'] = s
-        params['until'] = d
-        http_response = searcher.Search(params).content
-        data = json.loads(http_response)
-        if not data.get('statuses'):
-          continue
-        for r in data['statuses']:
-          tweet = parser.ParseTweet(r)
-          # Write each new data point as a comma separated list on a new line.
-          f.write(repr(tweet) + '\n')
-          # sort by date. Only train on tweets 1-3 hours old
-          # TODO Save and use data
-
-  print "Done collecting. :D"
-
-def predict(tweet):
-  '''
-  Use previously trained predictor to guess number of retweets in an hour.
-  '''
-  # TODO
-  return 0
-
-def sampleTweets(filename='baby_tweets.txt'):
-  '''
-  Collect tweet data on tweets younger than 5 minutes.
-  Make predictions and save into file under filename.
-  '''
-  # TODO
-  searcher = Searcher()
-  parser = Parser()
-  for s in SEEDS:
-    pass
-
-def scoreAllTweets(filename='baby_tweets.txt'):
-  '''
-  Find actual counts, score previous predictions.
-  '''
-  # TODO
-  original = open(filename, 'r')
-  update = open("scored_" + filename, 'w')
-  for line in original:
-    tweet_id = line.strip()
-    update.write(new_line + '\n')
 
 if __name__ == "__main__":
   main()
